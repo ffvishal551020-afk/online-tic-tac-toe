@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Online Tic Tac Toe</title>
+
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
+
+    <style>
+        body {
+            background: linear-gradient(135deg, #7a0000, #b30000);
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+
+        .container {
+            background: #ffecec;
+            border-radius: 24px;
+            padding: 30px;
+            display: inline-block;
+            margin-top: 40px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+        }
+
+        h2 {
+            color: #0d47a1;
+            margin-bottom: 10px;
+        }
+
+        #status {
+            font-size: 18px;
+            font-weight: bold;
+            color: #0d47a1;
+            margin-bottom: 15px;
+        }
+
+        .scoreboard {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 15px;
+            font-weight: bold;
+            color: #0d47a1;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(3, 100px);
+            gap: 12px;
+            justify-content: center;
+        }
+
+        .cell {
+            width: 100px;
+            height: 100px;
+            background: #ffffff;
+            font-size: 42px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border-radius: 14px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+
+        .cell:hover {
+            background: #f0f0f0;
+        }
+
+        button {
+            margin-top: 20px;
+            padding: 10px 28px;
+            font-size: 16px;
+            border: none;
+            border-radius: 20px;
+            background: #0d47a1;
+            color: white;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #08306b;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+    <h2>Online Tic Tac Toe</h2>
+
+    <div class="scoreboard">
+        <div>Player X Wins: <span id="xWins">0</span></div>
+        <div>Player O Wins: <span id="oWins">0</span></div>
+    </div>
+
+    <div id="status">Connecting...</div>
+
+    <div class="grid">
+        <div class="cell" onclick="makeMove(0)"></div>
+        <div class="cell" onclick="makeMove(1)"></div>
+        <div class="cell" onclick="makeMove(2)"></div>
+        <div class="cell" onclick="makeMove(3)"></div>
+        <div class="cell" onclick="makeMove(4)"></div>
+        <div class="cell" onclick="makeMove(5)"></div>
+        <div class="cell" onclick="makeMove(6)"></div>
+        <div class="cell" onclick="makeMove(7)"></div>
+        <div class="cell" onclick="makeMove(8)"></div>
+    </div>
+
+    <button onclick="resetGame()">Reset Game</button>
+</div>
+
+<script>
+    const firebaseConfig = {
+        apiKey: "YOUR_API_KEY",
+        databaseURL: "YOUR_DATABASE_URL",
+        projectId: "YOUR_PROJECT_ID"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database().ref("tic_tac_toe");
+
+    let playerSymbol = "";
+
+    const winPatterns = [
+        [0,1,2],[3,4,5],[6,7,8],
+        [0,3,6],[1,4,7],[2,5,8],
+        [0,4,8],[2,4,6]
+    ];
+
+    function checkWinner(board) {
+        for (let p of winPatterns) {
+            if (board[p[0]] &&
+                board[p[0]] === board[p[1]] &&
+                board[p[1]] === board[p[2]]) {
+                return board[p[0]];
+            }
+        }
+        return board.includes("") ? null : "Draw";
+    }
+
+    db.once("value").then(snapshot => {
+        let data = snapshot.val();
+
+        if (!data) {
+            db.set({
+                board: ["","","","","","","","",""],
+                turn: "X",
+                players: { X: false, O: false },
+                score: { X: 0, O: 0 }
+            });
+            playerSymbol = "X";
+            return;
+        }
+
+        if (!data.players.X) {
+            playerSymbol = "X";
+            db.child("players/X").set(true);
+        } else if (!data.players.O) {
+            playerSymbol = "O";
+            db.child("players/O").set(true);
+        }
+    });
+
+    db.on("value", snapshot => {
+        const data = snapshot.val();
+        if (!data) return;
+
+        document.getElementById("xWins").innerText = data.score.X;
+        document.getElementById("oWins").innerText = data.score.O;
+
+        const cells = document.querySelectorAll(".cell");
+        data.board.forEach((val, i) => {
+            cells[i].innerText = val;
+            cells[i].style.color =
+                val === "X" ? "#8b0000" : "#0d47a1";
+        });
+
+        const result = checkWinner(data.board);
+
+        if (result === "Draw") {
+            document.getElementById("status").innerText = "Game Draw";
+        }
+        else if (result) {
+            document.getElementById("status").innerText =
+                "WIN " + result;
+
+            db.child("score/" + result).set(data.score[result] + 1);
+        }
+        else {
+            document.getElementById("status").innerText =
+                data.turn === playerSymbol
+                ? "Your Turn"
+                : "Opponent Turn";
+        }
+    });
+
+    function makeMove(index) {
+        db.once("value").then(snapshot => {
+            let data = snapshot.val();
+            if (!data) return;
+            if (data.turn !== playerSymbol) return;
+            if (data.board[index] !== "") return;
+
+            data.board[index] = playerSymbol;
+            data.turn = playerSymbol === "X" ? "O" : "X";
+
+            db.set(data);
+        });
+    }
+
+    function resetGame() {
+        db.child("board").set(["","","","","","","","",""]);
+        db.child("turn").set("X");
+    }
+</script>
+
+</body>
+</html>
